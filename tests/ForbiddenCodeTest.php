@@ -45,7 +45,7 @@ class ForbiddenCodeTest extends PHPUnit_Framework_TestCase
     public function testVarDump()
     {
         $stmts = self::$parser->parse('<?php
-        var_dump("${date(\'Y\')}");
+        var_dump("...${date(\'Y\')}");
         ');
 
         $file_checker = new FileChecker('somefile.php', $this->project_checker, $stmts);
