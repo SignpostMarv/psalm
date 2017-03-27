@@ -60,7 +60,7 @@ class FileProvider
      */
     private static function parseStatementsInFile($file_contents)
     {
-        $lexer = new PhpParser\Lexer([
+        $lexer = new PhpParser\Lexer\Emulative([
             'usedAttributes' => [
                 'comments', 'startLine', 'startFilePos', 'endFilePos'
             ]
