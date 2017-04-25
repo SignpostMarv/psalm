@@ -7,7 +7,7 @@ php:
   - '7.1'
 
 install:
-  - composer --prefer-source install
+  - if [ $(phpenv global) = "5.5" ]; then composer install --ignore-platform-reqs --prefer-source && composer update --prefer-lowest --prefer-stable -n; else composer --prefer-source install; fi;
 
 script:
   - vendor/bin/phpunit
