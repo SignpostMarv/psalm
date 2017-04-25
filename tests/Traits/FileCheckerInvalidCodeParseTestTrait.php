@@ -34,13 +34,28 @@ trait FileCheckerInvalidCodeParseTestTrait
             Config::getInstance()->setCustomErrorLevel($error_level, Config::REPORT_SUPPRESS);
         }
 
+
+        $rethrow = true;
+        if (method_exists($this, 'expectException')) {
         $this->expectException('\Psalm\Exception\CodeException');
         $this->expectExceptionMessage($error_message);
+            $rethrow = false;
+        }
 
+        try {
         $stmts = self::$parser->parse($code);
 
         $file_checker = new FileChecker('somefile.php', $this->project_checker, $stmts);
         $context = new Context();
         $file_checker->visitAndAnalyzeMethods($context);
+        } catch (\Psalm\Exception\CodeException $e) {
+            if ($rethrow) {
+                throw $e;
+            } else {
+                $this->assertEquals($error_message, $e->getMessage());
+            }
+        } catch (\Psalm\Exception\UnsupportedPhpVersionException $e) {
+            $this->markTestSkipped($e->getMessage());
+        }
     }
 }

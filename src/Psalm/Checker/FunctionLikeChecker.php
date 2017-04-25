@@ -12,6 +12,7 @@ use Psalm\Config;
 use Psalm\Context;
 use Psalm\EffectsAnalyser;
 use Psalm\Exception\DocblockParseException;
+use Psalm\Exception\UnsupportedPhpVersionException;
 use Psalm\FunctionLikeParameter;
 use Psalm\Issue\DuplicateParam;
 use Psalm\Issue\InvalidDocblock;
@@ -1478,6 +1479,14 @@ abstract class FunctionLikeChecker extends SourceChecker implements StatementsSo
 
         $param_name = (string)$param->getName();
         $param_type = $param_type_string ? Type::parseString($param_type_string) : Type::getMixed();
+
+        if (method_exists($param, 'isVariadic') === false) {
+            throw new UnsupportedPhpVersionException(
+                'Cannot check ' .
+                get_class($param) .
+                '::isVariadic() on unsupported PHP versions'
+            );
+        }
 
         return new FunctionLikeParameter(
             $param_name,

@@ -57,15 +57,28 @@ class UnusedCodeTest extends TestCase
      */
     public function testUnusedCodeWithClassReferences($code, $error_message)
     {
+        $rethrow = true;
+        if (method_exists($this, 'expectException') === true) {
         $this->expectException('\Psalm\Exception\CodeException');
         $this->expectExceptionMessage($error_message);
+        } else {
+            $rethrow = false;
+        }
 
+        try {
         $stmts = self::$parser->parse($code);
 
         $file_checker = new FileChecker(self::$project_dir . 'somefile.php', $this->project_checker, $stmts);
         $context = new Context();
         $file_checker->visitAndAnalyzeMethods($context);
         $this->project_checker->checkClassReferences();
+      } catch (\Psalm\Exception\CodeException $e) {
+          if ($rethrow) {
+              throw $e;
+          } else {
+              $this->assertEquals($error_message, $e->getMessage());
+          }
+      }
     }
 
     /**
