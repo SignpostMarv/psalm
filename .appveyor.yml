@@ -16,9 +16,21 @@ environment:
   COMPOSER_ROOT_VERSION: 'dev-master'
   matrix:
     - php_ver_target: 7.0
+      DEPS: 'low'
+    - php_ver_target: 7.0
+      DEPS: 'high'
     - php_ver_target: 7.1
+      DEPS: 'low'
+    - php_ver_target: 7.1
+      DEPS: 'high'
     - php_ver_target: 7.2
+      DEPS: 'low'
+    - php_ver_target: 7.2
+      DEPS: 'high'
     - php_ver_target: 7.3
+      DEPS: 'low'
+    - php_ver_target: 7.3
+      DEPS: 'high'
 
 cache:
   - '%LOCALAPPDATA%\Composer\files -> composer.lock'
@@ -43,7 +55,8 @@ install:
     - IF %PHP%==1 echo @php %%~dp0composer.phar %%* > composer.bat
     - appveyor-retry appveyor DownloadFile https://getcomposer.org/composer.phar
     - cd c:\projects\php-project-workspace
-    - appveyor-retry composer install --no-progress --profile
+    - if %DEPS%==low appveyor-retry composer update --no-interaction --no-suggest --prefer-source --no-progress --profile --prefer-lowest --prefer-stable
+    - if %DEPS%==high appveyor-retry composer update --no-interaction --no-suggest --prefer-source --no-progress --profile
     - composer show
 
 ## Run the actual test
