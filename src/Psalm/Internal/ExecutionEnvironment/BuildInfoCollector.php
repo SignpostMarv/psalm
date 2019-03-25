@@ -109,7 +109,7 @@ class BuildInfoCollector
             $this->env['CI_BUILD_NUMBER'] = $this->env['APPVEYOR_BUILD_NUMBER'];
             $this->env['CI_JOB_ID'] = $this->env['APPVEYOR_JOB_NUMBER'];
             $this->env['CI_BRANCH'] = $this->env['APPVEYOR_REPO_BRANCH'];
-            $this->env['CI_PULL_REQUEST'] = $this->env['APPVEYOR_PULL_REQUEST_NUMBER'];
+            $this->env['CI_PULL_REQUEST'] = $this->env['APPVEYOR_PULL_REQUEST_NUMBER'] ?? '';
             $this->env['CI_NAME'] = 'AppVeyor';
 
             // backup
@@ -117,7 +117,7 @@ class BuildInfoCollector
             $this->readEnv['APPVEYOR_BUILD_NUMBER'] = $this->env['APPVEYOR_BUILD_NUMBER'];
             $this->readEnv['APPVEYOR_JOB_NUMBER'] = $this->env['APPVEYOR_JOB_NUMBER'];
             $this->readEnv['APPVEYOR_REPO_BRANCH'] = $this->env['APPVEYOR_REPO_BRANCH'];
-            $this->readEnv['APPVEYOR_PULL_REQUEST_NUMBER'] = $this->env['APPVEYOR_PULL_REQUEST_NUMBER'];
+            $this->readEnv['APPVEYOR_PULL_REQUEST_NUMBER'] = $this->env['APPVEYOR_PULL_REQUEST_NUMBER'] ?? '';
             $this->readEnv['CI_NAME'] = $this->env['CI_NAME'];
         }
 
