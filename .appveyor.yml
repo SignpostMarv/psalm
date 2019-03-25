@@ -52,6 +52,7 @@ install:
     - IF %PHP%==1 echo extension=php_fileinfo.dll >> php.ini
     - IF %PHP%==1 echo zend.assertions=1 >> php.ini
     - IF %PHP%==1 echo assert.exception=On >> php.ini
+    - IF %PHP%==1 echo error_reporting=E_ALL >> php.ini
     - IF %PHP%==1 echo @php %%~dp0composer.phar %%* > composer.bat
     - appveyor-retry appveyor DownloadFile https://getcomposer.org/composer.phar
     - cd c:\projects\php-project-workspace
