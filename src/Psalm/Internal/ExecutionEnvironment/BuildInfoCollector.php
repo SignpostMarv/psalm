@@ -158,7 +158,7 @@ class BuildInfoCollector
                 $this->readEnv['CI_REPO_NAME'] = $slug_parts[1];
             }
 
-            $pr_slug = (string) $this->env['APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME'] ?? '';
+            $pr_slug = (string) ($this->env['APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME'] ?? '');
 
             if ($pr_slug) {
                 $slug_parts = explode('/', $pr_slug);
