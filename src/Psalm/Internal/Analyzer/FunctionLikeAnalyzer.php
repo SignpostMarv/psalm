@@ -831,63 +831,28 @@ abstract class FunctionLikeAnalyzer extends SourceAnalyzer implements Statements
             }
         }
 
-        if ($context->collect_exceptions) {
-            if ($context->possibly_thrown_exceptions) {
-                $ignored_exceptions = array_change_key_case(
-                    $codebase->config->ignored_exceptions
-                );
-                $ignored_exceptions_and_descendants = array_change_key_case(
-                    $codebase->config->ignored_exceptions_and_descendants
-                );
+        foreach ($statements_analyzer->getUncaughtThrows($context) as $possibly_thrown_exception => $codelocation) {
+            $is_expected = false;
 
-                $undocumented_throws = [];
-
-                foreach ($context->possibly_thrown_exceptions as $possibly_thrown_exception => $_) {
-                    $is_expected = false;
-
-                    foreach ($storage->throws as $expected_exception => $_) {
-                        if ($expected_exception === $possibly_thrown_exception
-                            || $codebase->classExtends($possibly_thrown_exception, $expected_exception)
-                        ) {
-                            $is_expected = true;
-                            break;
-                        }
-                    }
-
-                    foreach ($ignored_exceptions_and_descendants as $expected_exception => $_) {
-                        if ($expected_exception === $possibly_thrown_exception
-                            || $codebase->classExtends($possibly_thrown_exception, $expected_exception)
-                        ) {
-                            $is_expected = true;
-                            break;
-                        }
-                    }
-
-                    if (!$is_expected) {
-                        $undocumented_throws[$possibly_thrown_exception] = true;
-                    }
+            foreach ($storage->throws as $expected_exception => $_) {
+                if ($expected_exception === $possibly_thrown_exception
+                    || $codebase->classExtends($possibly_thrown_exception, $expected_exception)
+                ) {
+                    $is_expected = true;
+                    break;
                 }
+            }
 
-                foreach ($undocumented_throws as $possibly_thrown_exception => $_) {
-                    if (isset($ignored_exceptions[strtolower($possibly_thrown_exception)])) {
-                        continue;
-                    }
-
-                    if (IssueBuffer::accepts(
-                        new MissingThrowsDocblock(
-                            $possibly_thrown_exception . ' is thrown but not caught - please either catch'
-                                . ' or add a @throws annotation',
-                            new CodeLocation(
-                                $this,
-                                $this->function,
-                                null,
-                                true
-                            )
-                        ),
-                        $this->getSuppressedIssues()
-                    )) {
-                        // fall through
-                    }
+            if (!$is_expected) {
+                if (IssueBuffer::accepts(
+                    new MissingThrowsDocblock(
+                        $possibly_thrown_exception . ' is thrown but not caught - please either catch'
+                            . ' or add a @throws annotation',
+                        $codelocation
+                    ),
+                    $this->getSuppressedIssues()
+                )) {
+                    // fall through
                 }
             }
         }
@@ -1255,50 +1220,6 @@ abstract class FunctionLikeAnalyzer extends SourceAnalyzer implements Statements
      *
      * @return array<int, FunctionLikeParameter>
      */
-    public static function getMethodParamsById(
-        StatementsAnalyzer $statements_analyzer,
-        $method_id,
-        array $args
-    ) {
-        $fq_class_name = strpos($method_id, '::') !== false ? explode('::', $method_id)[0] : null;
-
-        $codebase = $statements_analyzer->getCodebase();
-
-        if ($fq_class_name) {
-            $fq_class_name = $codebase->classlikes->getUnAliasedName($fq_class_name);
-
-            $class_storage = $codebase->classlike_storage_provider->get($fq_class_name);
-
-            if ($class_storage->user_defined || $class_storage->stubbed) {
-                $method_params = $codebase->methods->getMethodParams($method_id, $statements_analyzer, $args);
-
-                return $method_params;
-            }
-        }
-
-        $declaring_method_id = $codebase->methods->getDeclaringMethodId($method_id);
-
-        if (CallMap::inCallMap($declaring_method_id ?: $method_id)) {
-            $function_param_options = CallMap::getParamsFromCallMap($declaring_method_id ?: $method_id);
-
-            if ($function_param_options === null) {
-                throw new \UnexpectedValueException(
-                    'Not expecting $function_param_options to be null for ' . $method_id
-                );
-            }
-
-            return self::getMatchingParamsFromCallMapOptions($codebase, $function_param_options, $args);
-        }
-
-        return $codebase->methods->getMethodParams($method_id);
-    }
-
-    /**
-     * @param  string                           $method_id
-     * @param  array<int, PhpParser\Node\Arg>   $args
-     *
-     * @return array<int, FunctionLikeParameter>
-     */
     public static function getFunctionParamsFromCallMapById(Codebase $codebase, $method_id, array $args)
     {
         $function_param_options = CallMap::getParamsFromCallMap($method_id);
@@ -1318,7 +1239,7 @@ abstract class FunctionLikeAnalyzer extends SourceAnalyzer implements Statements
      *
      * @return array<int, FunctionLikeParameter>
      */
-    protected static function getMatchingParamsFromCallMapOptions(
+    public static function getMatchingParamsFromCallMapOptions(
         Codebase $codebase,
         array $function_param_options,
         array $args

@@ -4,6 +4,8 @@ namespace Psalm\Internal\Codebase;
 use PhpParser;
 use Psalm\Codebase;
 use Psalm\CodeLocation;
+use Psalm\Context;
+use Psalm\Internal\Analyzer\FunctionLikeAnalyzer;
 use Psalm\Internal\Provider\{
     ClassLikeStorageProvider,
     FileReferenceProvider,
@@ -221,12 +223,16 @@ class Methods
 
     /**
      * @param  string $method_id
-     * @param  array<PhpParser\Node\Arg> $args
+     * @param  array<int, PhpParser\Node\Arg> $args
      *
      * @return array<int, FunctionLikeParameter>
      */
-    public function getMethodParams($method_id, StatementsSource $source = null, array $args = null)
-    {
+    public function getMethodParams(
+        $method_id,
+        StatementsSource $source = null,
+        array $args = null,
+        Context $context = null
+    ) : array {
         list($fq_class_name, $method_name) = explode('::', $method_id);
 
         if ($this->params_provider->has($fq_class_name)) {
@@ -234,7 +240,8 @@ class Methods
                 $fq_class_name,
                 $method_name,
                 $args,
-                $source
+                $source,
+                $context
             );
 
             if ($method_params !== null) {
@@ -242,20 +249,51 @@ class Methods
             }
         }
 
-        if ($declaring_method_id = $this->getDeclaringMethodId($method_id)) {
-            $storage = $this->getStorage($declaring_method_id);
+        $declaring_method_id = $this->getDeclaringMethodId($method_id);
 
-            $non_null_param_types = array_filter(
-                $storage->params,
-                /** @return bool */
-                function (FunctionLikeParameter $p) {
-                    return $p->type !== null && $p->has_docblock_type;
+        // functions
+        if (CallMap::inCallMap($declaring_method_id ?: $method_id)) {
+            $declaring_fq_class_name = explode('::', $declaring_method_id ?: $method_id)[0];
+
+            $class_storage = $this->classlike_storage_provider->get($declaring_fq_class_name);
+
+            if (!$class_storage->stubbed) {
+                $function_param_options = CallMap::getParamsFromCallMap($declaring_method_id ?: $method_id);
+
+                if ($function_param_options === null) {
+                    throw new \UnexpectedValueException(
+                        'Not expecting $function_param_options to be null for ' . $declaring_method_id
+                    );
                 }
-            );
+
+                if (!$source || $args === null || count($function_param_options) === 1) {
+                    return $function_param_options[0];
+                }
+
+                if ($context && $source instanceof \Psalm\Internal\Analyzer\StatementsAnalyzer) {
+                    foreach ($args as $arg) {
+                        \Psalm\Internal\Analyzer\Statements\ExpressionAnalyzer::analyze(
+                            $source,
+                            $arg->value,
+                            $context
+                        );
+                    }
+                }
+
+                return FunctionLikeAnalyzer::getMatchingParamsFromCallMapOptions(
+                    $source->getCodebase(),
+                    $function_param_options,
+                    $args
+                );
+            }
+        }
+
+        if ($declaring_method_id) {
+            $storage = $this->getStorage($declaring_method_id);
 
             $params = $storage->params;
 
-            if ($non_null_param_types) {
+            if ($storage->has_docblock_param_types) {
                 return $params;
             }
 
@@ -273,49 +311,40 @@ class Methods
                 return $params;
             }
 
-            foreach ($class_storage->overridden_method_ids[$appearing_method_name] as $overridden_method_id) {
-                $overridden_storage = $this->getStorage($overridden_method_id);
+            if (!isset($class_storage->documenting_method_ids[$appearing_method_name])) {
+                return $params;
+            }
 
-                list($overriding_fq_class_name) = explode('::', $overridden_method_id);
+            $overridden_method_id = $class_storage->documenting_method_ids[$appearing_method_name];
+            $overridden_storage = $this->getStorage($overridden_method_id);
 
-                $non_null_param_types = array_filter(
-                    $overridden_storage->params,
-                    /** @return bool */
-                    function (FunctionLikeParameter $p) {
-                        return $p->type !== null && $p->has_docblock_type;
-                    }
-                );
+            list($overriding_fq_class_name) = explode('::', $overridden_method_id);
 
-                if ($non_null_param_types) {
-                    foreach ($params as $i => $param) {
-                        if (isset($overridden_storage->params[$i]->type)
-                            && $overridden_storage->params[$i]->has_docblock_type
-                            && $overridden_storage->params[$i]->name === $param->name
-                        ) {
-                            $params[$i] = clone $param;
-                            /** @var Type\Union $params[$i]->type */
-                            $params[$i]->type = clone $overridden_storage->params[$i]->type;
+            foreach ($params as $i => $param) {
+                if (isset($overridden_storage->params[$i]->type)
+                    && $overridden_storage->params[$i]->has_docblock_type
+                    && $overridden_storage->params[$i]->name === $param->name
+                ) {
+                    $params[$i] = clone $param;
+                    /** @var Type\Union $params[$i]->type */
+                    $params[$i]->type = clone $overridden_storage->params[$i]->type;
 
-                            if ($source) {
-                                $params[$i]->type = self::localizeParamType(
-                                    $source->getCodebase(),
-                                    $params[$i]->type,
-                                    $appearing_fq_class_name,
-                                    $overriding_fq_class_name
-                                );
-                            }
-
-                            if ($params[$i]->signature_type
-                                && $params[$i]->signature_type->isNullable()
-                            ) {
-                                $params[$i]->type->addType(new Type\Atomic\TNull);
-                            }
-
-                            $params[$i]->type_location = $overridden_storage->params[$i]->type_location;
-                        }
+                    if ($source) {
+                        $params[$i]->type = self::localizeParamType(
+                            $source->getCodebase(),
+                            $params[$i]->type,
+                            $appearing_fq_class_name,
+                            $overriding_fq_class_name
+                        );
                     }
 
-                    break;
+                    if ($params[$i]->signature_type
+                        && $params[$i]->signature_type->isNullable()
+                    ) {
+                        $params[$i]->type->addType(new Type\Atomic\TNull);
+                    }
+
+                    $params[$i]->type_location = $overridden_storage->params[$i]->type_location;
                 }
             }
 

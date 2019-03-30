@@ -138,6 +138,8 @@ class StaticCallAnalyzer extends \Psalm\Internal\Analyzer\Statements\Expression\
                         $fq_class_name,
                         new CodeLocation($source, $stmt->class),
                         $statements_analyzer->getSuppressedIssues(),
+                        false,
+                        false,
                         false
                     );
                 }
@@ -657,11 +659,7 @@ class StaticCallAnalyzer extends \Psalm\Internal\Analyzer\Statements\Expression\
                 $found_generic_params = MethodCallAnalyzer::getClassTemplateParams(
                     $codebase,
                     $class_storage,
-                    $stmt->class instanceof PhpParser\Node\Name
-                        && $stmt->class->parts === ['parent']
-                        && $context->self
-                        ? $context->self
-                        : $fq_class_name,
+                    $fq_class_name,
                     $method_name_lc,
                     $lhs_type_part,
                     null

@@ -232,7 +232,7 @@ class CallAnalyzer
         $codebase = $statements_analyzer->getCodebase();
 
         $method_params = $method_id
-            ? FunctionLikeAnalyzer::getMethodParamsById($statements_analyzer, $method_id, $args)
+            ? $codebase->methods->getMethodParams($method_id, $statements_analyzer, $args, $context)
             : null;
 
         if (self::checkFunctionArguments(
@@ -274,18 +274,25 @@ class CallAnalyzer
 
             $method_storage = $declaring_class_storage->methods[strtolower($declaring_method_name)];
 
-            if ($context->collect_exceptions) {
-                $context->possibly_thrown_exceptions += $method_storage->throws;
-            }
-        }
+            if ($declaring_class_storage->user_defined
+                && !$method_storage->has_docblock_param_types
+                && isset($declaring_class_storage->documenting_method_ids[$method_name])
+            ) {
+                $documenting_method_id = $declaring_class_storage->documenting_method_ids[$method_name];
 
-        if (!$class_storage->user_defined) {
-            // check again after we've processed args
-            $method_params = FunctionLikeAnalyzer::getMethodParamsById(
-                $statements_analyzer,
-                $method_id,
-                $args
-            );
+                $documenting_method_storage = $codebase->methods->getStorage($documenting_method_id);
+
+                if ($documenting_method_storage->template_types) {
+                    $method_storage = $documenting_method_storage;
+                }
+            }
+
+            if ($context->collect_exceptions) {
+                $context->possibly_thrown_exceptions += array_fill_keys(
+                    array_keys($method_storage->throws),
+                    $code_location
+                );
+            }
         }
 
         if (self::checkFunctionLikeArgumentsMatch(
@@ -367,6 +374,7 @@ class CallAnalyzer
                         || $arg->value instanceof PhpParser\Node\Expr\FuncCall
                         || $arg->value instanceof PhpParser\Node\Expr\MethodCall
                         || $arg->value instanceof PhpParser\Node\Expr\Assign
+                        || $arg->value instanceof PhpParser\Node\Expr\Array_
                     )
                 ) {
                     if (self::handleByRefFunctionArg(
@@ -445,6 +453,7 @@ class CallAnalyzer
             || $arg->value instanceof PhpParser\Node\Expr\MethodCall
             || $arg->value instanceof PhpParser\Node\Expr\Assign
             || $arg->value instanceof PhpParser\Node\Expr\ArrayDimFetch
+            || $arg->value instanceof PhpParser\Node\Expr\Array_
         ) {
             if (ExpressionAnalyzer::analyze($statements_analyzer, $arg->value, $context) === false) {
                 return false;
@@ -1418,6 +1427,13 @@ class CallAnalyzer
                 $empty_generic_params = [];
 
                 $param_type->replaceTemplateTypesWithStandins(
+                    $existing_generic_params,
+                    $empty_generic_params,
+                    $codebase,
+                    $arg->value->inferredType
+                );
+
+                $arg_type->replaceTemplateTypesWithStandins(
                     $existing_generic_params,
                     $empty_generic_params,
                     $codebase,

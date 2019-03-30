@@ -1057,39 +1057,6 @@ class TemplateExtendsTest extends TestCase
                         }
                     }',
             ],
-            'extendsAndCallsParent' => [
-                '<?php
-                    /**
-                     * @template T
-                     */
-                    abstract class Foo
-                    {
-                        /**
-                         * @param T::class $str
-                         *
-                         * @return T::class
-                         */
-                        public static function DoThing(string $str)
-                        {
-                            return $str;
-                        }
-                    }
-                    /**
-                     * @template-extends Foo<DateTimeInterface>
-                     */
-                    class Bar extends Foo
-                    {
-                        /**
-                         * @param class-string<DateTimeInterface> $str
-                         *
-                         * @return class-string<DateTimeInterface>
-                         */
-                        public static function DoThing(string $str)
-                        {
-                            return parent::DoThing($str);
-                        }
-                    }',
-            ],
             'genericStaticAndSelf' => [
                 '<?php
                     /**
@@ -1654,6 +1621,149 @@ class TemplateExtendsTest extends TestCase
 
                         public function toArray() {
                             return ["foo"];
+                        }
+                    }',
+            ],
+            'templateNotExtendedButSignatureInherited' => [
+                '<?php
+                    class Base {
+                        /**
+                         * @template T
+                         * @param T $x
+                         * @return T
+                         */
+                        function example($x) {
+                            return $x;
+                        }
+                    }
+
+                    class Child extends Base {
+                        function example($x) {
+                            return $x;
+                        }
+                    }
+
+                    ord((new Child())->example("str"));'
+            ],
+            'allowWiderParentType' => [
+                '<?php
+                    /**
+                     * @template T
+                     */
+                    abstract class Stringer {
+                        /**
+                         * @param T $t
+                         */
+                        public static function getString($t, object $o = null) : string {
+                            return "hello";
+                        }
+                    }
+
+                    class A {}
+
+                    /**
+                     * @template-extends Stringer<A>
+                     */
+                    class AStringer extends Stringer {
+                        public static function getString($t, object $o = null) : string {
+                            if ($o) {
+                                return parent::getString($o);
+                            }
+
+                            return "a";
+                        }
+                    }'
+            ],
+            'allowTraitExtendAndImplementWithExplicitParamType' => [
+                '<?php
+                    /**
+                     * @template T
+                     */
+                    trait ValueObjectTrait
+                    {
+                        /**
+                         * @psalm-var ?T
+                         */
+                        protected $value;
+
+                        /**
+                         * @psalm-param T $value
+                         *
+                         * @param $value
+                         */
+                        private function setValue($value): void {
+                            $this->validate($value);
+
+                            $this->value = $value;
+                        }
+
+                        /**
+                         * @psalm-param T $value
+                         *
+                         * @param $value
+                         */
+                        abstract protected function validate($value): void;
+                    }
+
+                    final class StringValidator {
+                        /**
+                         * @template-use ValueObjectTrait<string>
+                         */
+                        use ValueObjectTrait;
+
+                        /**
+                         * @param string $value
+                         */
+                        protected function validate($value): void
+                        {
+                            if (strlen($value) > 30) {
+                                throw new \Exception("bad");
+                            }
+                        }
+                    }',
+            ],
+            'allowTraitExtendAndImplementWithoutExplicitParamType' => [
+                '<?php
+                    /**
+                     * @template T
+                     */
+                    trait ValueObjectTrait
+                    {
+                        /**
+                         * @psalm-var ?T
+                         */
+                        protected $value;
+
+                        /**
+                         * @psalm-param T $value
+                         *
+                         * @param $value
+                         */
+                        private function setValue($value): void {
+                            $this->validate($value);
+
+                            $this->value = $value;
+                        }
+
+                        /**
+                         * @psalm-param T $value
+                         *
+                         * @param $value
+                         */
+                        abstract protected function validate($value): void;
+                    }
+
+                    final class StringValidator {
+                        /**
+                         * @template-use ValueObjectTrait<string>
+                         */
+                        use ValueObjectTrait;
+
+                        protected function validate($value): void
+                        {
+                            if (strlen($value) > 30) {
+                                throw new \Exception("bad");
+                            }
                         }
                     }',
             ],
@@ -2383,6 +2493,41 @@ class TemplateExtendsTest extends TestCase
                         }
                     }',
                 'error_message' => 'InvalidReturnType',
+            ],
+            'implementsChildClassWithNonExtendedTemplate' => [
+                '<?php
+                    /**
+                     * @template T
+                     */
+                    class Base {
+                        /** @var T */
+                        private $t;
+
+                        /** @param T $t */
+                        public function __construct($t) {
+                            $this->t = $t;
+                        }
+
+                        /**
+                         * @param T $x
+                         * @return T
+                         */
+                        function example($x) {
+                            return $x;
+                        }
+                    }
+
+                    class Child extends Base {
+                        function example($x) {
+                            return $x;
+                        }
+                    }
+
+                    /** @param Child $c */
+                    function bar(Child $c) : void {
+                        ord($c->example("boris"));
+                    }',
+                'error_message' => 'MixedArgument - src/somefile.php:31:29 - Argument 1 of ord cannot be mixed, expecting string'
             ],
         ];
     }

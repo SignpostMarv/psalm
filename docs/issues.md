@@ -278,7 +278,7 @@ class B extends A {
 
 ### ImplicitToStringCast
 
-Emitted when implictly converting an object with a `__toString` method to a string
+Emitted when implicitly converting an object with a `__toString` method to a string
 
 ```php
 class A {
@@ -1650,7 +1650,7 @@ function foo(?array $arr) : void {
 
 ### PossiblyNullOperand
 
-Emitted when using a possibly `null` value as part of an operation (e.g. `+`, `.`, `^` etc.`)
+Emitted when using a possibly `null` value as part of an operation (e.g. `+`, `.`, `^` etc.)
 
 ```php
 function foo(?int $a) : void {
@@ -1890,6 +1890,22 @@ Emitted when using a reserved word as a class name
 function foo(resource $res) : void {}
 ```
 
+### TraitMethodSignatureMismatch
+
+Emitted when a method's signature or return type differs from corresponding trait-defined method
+
+```php
+trait T {
+    abstract public function foo(int $i);
+}
+
+class A {
+    use T;
+
+    public function foo(string $s) : void {}
+}
+```
+
 ### TooFewArguments
 
 Emitted when calling a function with fewer arguments than the function has parameters
@@ -1955,6 +1971,20 @@ Emitted checking whether one value has a type or value that is impossible given 
 ```php
 $a = "hello";
 if ($a === 5) {}
+```
+
+### UncaughtThrowInGlobalScope
+
+Emitted when a possible exception isn't caught in global scope
+
+```php
+/**
+ * @throws \Exception
+ */
+function foo() : int {
+    return random_int(0, 1);
+}
+foo();
 ```
 
 ### UndefinedClass

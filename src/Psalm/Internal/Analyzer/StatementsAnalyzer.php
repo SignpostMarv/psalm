@@ -867,26 +867,121 @@ class StatementsAnalyzer extends SourceAnalyzer implements StatementsSource
      */
     private function analyzeStatic(PhpParser\Node\Stmt\Static_ $stmt, Context $context)
     {
+        $codebase = $this->getCodebase();
+
         foreach ($stmt->vars as $var) {
+            if (!is_string($var->var->name)) {
+                continue;
+            }
+
+            $var_id = '$' . $var->var->name;
+
+            $doc_comment = $stmt->getDocComment();
+
+            $comment_type = null;
+
+            if ($doc_comment) {
+                $var_comments = [];
+
+                try {
+                    $var_comments = CommentAnalyzer::getTypeFromComment(
+                        (string) $doc_comment,
+                        $this->getSource(),
+                        $this->getAliases(),
+                        $this->getTemplateTypeMap()
+                    );
+                } catch (\Psalm\Exception\IncorrectDocblockException $e) {
+                    if (IssueBuffer::accepts(
+                        new \Psalm\Issue\MissingDocblockType(
+                            (string)$e->getMessage(),
+                            new CodeLocation($this, $var)
+                        )
+                    )) {
+                        // fall through
+                    }
+                } catch (DocblockParseException $e) {
+                    if (IssueBuffer::accepts(
+                        new InvalidDocblock(
+                            (string)$e->getMessage(),
+                            new CodeLocation($this->getSource(), $var)
+                        )
+                    )) {
+                        // fall through
+                    }
+                }
+
+                foreach ($var_comments as $var_comment) {
+                    try {
+                        $var_comment_type = ExpressionAnalyzer::fleshOutType(
+                            $codebase,
+                            $var_comment->type,
+                            $context->self,
+                            $context->self
+                        );
+
+                        $var_comment_type->setFromDocblock();
+
+                        $var_comment_type->check(
+                            $this,
+                            new CodeLocation($this->getSource(), $var),
+                            $this->getSuppressedIssues()
+                        );
+
+                        if (!$var_comment->var_id || $var_comment->var_id === $var_id) {
+                            $comment_type = $var_comment_type;
+                            continue;
+                        }
+
+                        $context->vars_in_scope[$var_comment->var_id] = $var_comment_type;
+                    } catch (\UnexpectedValueException $e) {
+                        if (IssueBuffer::accepts(
+                            new InvalidDocblock(
+                                (string)$e->getMessage(),
+                                new CodeLocation($this, $var)
+                            )
+                        )) {
+                            // fall through
+                        }
+                    }
+                }
+
+                if ($comment_type) {
+                    $context->byref_constraints[$var_id] = new \Psalm\Internal\ReferenceConstraint($comment_type);
+                }
+            }
+
             if ($var->default) {
                 if (ExpressionAnalyzer::analyze($this, $var->default, $context) === false) {
                     return false;
                 }
+
+                if ($comment_type
+                    && isset($var->default->inferredType)
+                    && !TypeAnalyzer::isContainedBy(
+                        $codebase,
+                        $var->default->inferredType,
+                        $comment_type
+                    )
+                ) {
+                    if (IssueBuffer::accepts(
+                        new \Psalm\Issue\ReferenceConstraintViolation(
+                            $var_id . ' of type ' . $comment_type->getId() . ' cannot be assigned type '
+                                . $var->default->inferredType->getId(),
+                            new CodeLocation($this, $var)
+                        )
+                    )) {
+                        // fall through
+                    }
+                }
             }
 
             if ($context->check_variables) {
-                if (!is_string($var->var->name)) {
-                    continue;
-                }
-
-                $var_id = '$' . $var->var->name;
-
-                $context->vars_in_scope[$var_id] = Type::getMixed();
+                $context->vars_in_scope[$var_id] = $comment_type ? clone $comment_type : Type::getMixed();
                 $context->vars_possibly_in_scope[$var_id] = true;
                 $context->assigned_var_ids[$var_id] = true;
                 $this->byref_uses[$var_id] = true;
 
-                $location = new CodeLocation($this, $stmt);
+                $location = new CodeLocation($this, $var);
 
                 if ($context->collect_references) {
                     $context->unreferenced_vars[$var_id] = [$location->getHash() => $location];
@@ -1003,7 +1098,7 @@ class StatementsAnalyzer extends SourceAnalyzer implements StatementsSource
                 $stmt instanceof PhpParser\Node\Expr\BinaryOp\Mul ||
                 $stmt instanceof PhpParser\Node\Expr\BinaryOp\Pow
             ) {
-                BinaryOpAnalyzer::analyzeNonDivArithmenticOp(
+                BinaryOpAnalyzer::analyzeNonDivArithmeticOp(
                     $file_source instanceof StatementsSource ? $file_source : null,
                     $stmt->left,
                     $stmt->right,
@@ -1386,7 +1481,8 @@ class StatementsAnalyzer extends SourceAnalyzer implements StatementsSource
             return $file_storage_provider->get($constant_file_path)->constants[$fq_const_name];
         }
 
-        return ConstFetchAnalyzer::getGlobalConstType($codebase, $fq_const_name, $const_name);
+        return ConstFetchAnalyzer::getGlobalConstType($codebase, $fq_const_name, $const_name)
+            ?? ConstFetchAnalyzer::getGlobalConstType($codebase, $const_name, $const_name);
     }
 
     /**
@@ -1593,5 +1689,47 @@ class StatementsAnalyzer extends SourceAnalyzer implements StatementsSource
     public function setByRefUses(array $byref_uses)
     {
         $this->byref_uses = $byref_uses;
+    }
+
+    /**
+     * @return array<string, CodeLocation>
+     */
+    public function getUncaughtThrows(Context $context)
+    {
+        $uncaught_throws = [];
+
+        if ($context->collect_exceptions) {
+            if ($context->possibly_thrown_exceptions) {
+                $ignored_exceptions = array_change_key_case(
+                    $this->codebase->config->ignored_exceptions
+                );
+                $ignored_exceptions_and_descendants = array_change_key_case(
+                    $this->codebase->config->ignored_exceptions_and_descendants
+                );
+
+                foreach ($context->possibly_thrown_exceptions as $possibly_thrown_exception => $codelocation) {
+                    if (isset($ignored_exceptions[strtolower($possibly_thrown_exception)])) {
+                        continue;
+                    }
+
+                    $is_expected = false;
+
+                    foreach ($ignored_exceptions_and_descendants as $expected_exception => $_) {
+                        if ($expected_exception === $possibly_thrown_exception
+                            || $this->codebase->classExtends($possibly_thrown_exception, $expected_exception)
+                        ) {
+                            $is_expected = true;
+                            break;
+                        }
+                    }
+
+                    if (!$is_expected) {
+                        $uncaught_throws[$possibly_thrown_exception] = $codelocation;
+                    }
+                }
+            }
+        }
+
+        return $uncaught_throws;
     }
 }

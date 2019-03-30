@@ -52,6 +52,7 @@ $valid_long_options = [
     'php-version:',
     'generate-json-map:',
     'alter',
+    'language-server',
     'with-spirit::',
 ];
 
@@ -65,6 +66,11 @@ $options = getopt(implode('', $valid_short_options), $valid_long_options);
 
 if (isset($options['alter'])) {
     include 'psalter.php';
+    exit;
+}
+
+if (isset($options['language-server'])) {
+    include 'psalm-language-server.php';
     exit;
 }
 
@@ -187,7 +193,7 @@ Options:
         If greater than one, Psalm will run analysis on multiple threads, speeding things up.
 
     --report=PATH
-        The path where to output report file. The output format is base on the file extension.
+        The path where to output report file. The output format is based on the file extension.
         (Currently supported format: ".json", ".xml", ".txt", ".emacs")
 
     --clear-cache
@@ -229,6 +235,9 @@ Options:
 
     --alter
         Run Psalter
+
+    --language-server
+        Run Psalm Language Server
 
 HELP;
 

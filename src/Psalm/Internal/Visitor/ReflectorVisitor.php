@@ -597,6 +597,7 @@ class ReflectorVisitor extends PhpParser\NodeVisitorAbstract implements PhpParse
                         $second_arg_value,
                         $this->aliases
                     ) ?: Type::getMixed();
+
                     if ($this->functionlike_storages && !$this->config->hoist_constants) {
                         $functionlike_storage =
                             $this->functionlike_storages[count($this->functionlike_storages) - 1];
@@ -604,6 +605,10 @@ class ReflectorVisitor extends PhpParser\NodeVisitorAbstract implements PhpParse
                     } else {
                         $this->file_storage->constants[$const_name] = $const_type;
                         $this->file_storage->declaring_constants[$const_name] = $this->file_path;
+                    }
+
+                    if ($this->codebase->register_stub_files || $this->codebase->register_autoload_files) {
+                        $this->codebase->addGlobalConstantType($const_name, $const_type);
                     }
                 }
             }
@@ -1717,7 +1722,9 @@ class ReflectorVisitor extends PhpParser\NodeVisitorAbstract implements PhpParse
 
         $storage->suppressed_issues = $docblock_info->suppress;
 
-        if ($this->config->check_for_throws_docblock) {
+        if ($this->config->check_for_throws_docblock ||
+            $this->config->check_for_throws_in_global_scope
+        ) {
             foreach ($docblock_info->throws as $throw_class) {
                 $exception_fqcln = Type::getFQCLNFromString(
                     $throw_class,
@@ -2011,6 +2018,17 @@ class ReflectorVisitor extends PhpParser\NodeVisitorAbstract implements PhpParse
                 $fake_method
             );
         }
+
+        if ($storage instanceof MethodStorage) {
+            $storage->has_docblock_param_types = (bool) array_filter(
+                $storage->params,
+                /** @return bool */
+                function (FunctionLikeParameter $p) {
+                    return $p->type !== null && $p->has_docblock_type;
+                }
+            );
+        }
+
 
         foreach ($docblock_info->params_out as $docblock_param_out) {
             $param_name = substr($docblock_param_out['name'], 1);
