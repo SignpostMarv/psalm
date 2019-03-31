@@ -217,7 +217,7 @@ class ConfigTest extends TestCase
         $this->assertFalse($config->isInProjectDirs(realpath('tests/symlinktest/a/ignoreme.php')));
         $this->assertFalse($config->isInProjectDirs(realpath('examples/StringAnalyzer.php')));
 
-        $regex = '/^unlink\([^\)]+\): Permission denied$/';
+        $regex = '/^unlink\([^\)]+\): (?:Permission denied|No such file or directory)$/';
         $last_error = error_get_last();
         $check_unlink_error =
             !is_array($last_error) ||
