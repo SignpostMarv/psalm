@@ -287,11 +287,8 @@ class CallAnalyzer
                 }
             }
 
-            if ($context->collect_exceptions) {
-                $context->possibly_thrown_exceptions += array_fill_keys(
-                    array_keys($method_storage->throws),
-                    $code_location
-                );
+            if (!$context->isSuppressingExceptions($statements_analyzer)) {
+                $context->mergeFunctionExceptions($method_storage, $code_location);
             }
         }
 
