@@ -232,9 +232,9 @@ class ConfigTest extends TestCase
                 throw new \ErrorException(
                     $last_error['message'],
                     0,
-                    $last_error['type'] ?? 0,
-                    $last_error['file'] ?? 'unknown',
-                    $last_error['line'] ?? 0
+                    $last_error['type'],
+                    $last_error['file'],
+                    $last_error['line']
                 );
             }
         }
