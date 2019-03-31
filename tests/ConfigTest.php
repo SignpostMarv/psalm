@@ -228,10 +228,7 @@ class ConfigTest extends TestCase
         if ($check_unlink_error) {
             $last_error = error_get_last();
 
-            if (
-                is_array($last_error) &&
-                !preg_match($regex, $last_error['message'])
-            ) {
+            if (is_array($last_error) && !preg_match($regex, $last_error['message'])) {
                 throw new \ErrorException(
                     $last_error['message'],
                     0,
