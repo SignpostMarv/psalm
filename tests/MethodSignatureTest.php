@@ -1125,6 +1125,9 @@ class MethodSignatureTest extends TestCase
                 '<?php
                     class Foo implements \Serializable {
                         public function unserialize(string $serialized) {}
+                        /**
+                         * @return string
+                         */
                         public function serialize() {}
                     }',
                 'error_message' => 'MethodSignatureMismatch',
