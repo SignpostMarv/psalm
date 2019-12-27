@@ -1361,3 +1361,18 @@ final class WeakReference
     /** @return ?T */
     public function get(): ?object;
 }
+
+interface Serializable
+{
+    /**
+     * @return string
+     */
+    public function serialize();
+
+    /**
+     * @param string $str
+     *
+     * @return void
+     */
+    public function unserialize($str);
+}
