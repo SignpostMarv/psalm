@@ -265,10 +265,30 @@ class FunctionAnalyzer extends FunctionLikeAnalyzer
 
                 case 'min':
                 case 'max':
-                    if (isset($call_args[0])) {
-                        $first_arg = $call_args[0]->value;
+                    $call_arg_types = array_map(
+                        /** @return Type\Union|null */
+                        function (PhpParser\Node\Arg $arg) use ($statements_analyzer) {
+                            return $statements_analyzer->node_data->getType($arg->value);
+                        },
+                        $call_args
+                    );
+                    $scalar_types = array_map(
+                        function (Type\Union $type = null) : bool {
+                            return $type && $type->hasScalarType();
+                        },
+                        $call_arg_types
+                    );
+                    $all_scalar_types = count($scalar_types) > 0 && count($scalar_types) === count(array_filter($scalar_types));
+                    var_dump(array_map(
+                        /** @return array|null */
+                        function (Type\Union $type = null) {
+                            return $type ? $type->getAtomicTypes() : null;
+                        },
+                        $call_arg_types
+                    ));exit(1);
+                    if ($call_arg_types[0]) {
+                        $first_arg_type = $call_arg_types[0];
 
-                        if ($first_arg_type = $statements_analyzer->node_data->getType($first_arg)) {
                             if ($first_arg_type->hasArray()) {
                                 /** @psalm-suppress PossiblyUndefinedStringArrayOffset */
                                 $array_type = $first_arg_type->getAtomicTypes()['array'];
@@ -283,15 +303,13 @@ class FunctionAnalyzer extends FunctionLikeAnalyzer
                                 if ($array_type instanceof Type\Atomic\TList) {
                                     return clone $array_type->type_param;
                                 }
-                            } elseif ($first_arg_type->hasScalarType()
-                                && isset($call_args[1])
-                                && ($second_arg = $call_args[1]->value)
-                                && ($second_arg_type = $statements_analyzer->node_data->getType($second_arg))
-                                && $second_arg_type->hasScalarType()
+                            } elseif (
+                                isset($call_arg_types[1], $scalar_types[1])
+                                && $all_scalar_types
                             ) {
-                                return Type::combineUnionTypes($first_arg_type, $second_arg_type);
+                                var_dump($scalar_types);exit(1);
+                                return Type::combineUnionTypes($first_arg_type, $call_arg_types[1]);
                             }
-                        }
                     }
 
                     break;
